@@ -202,14 +202,6 @@ def make_llm_completion(
         LLMResponse from the LLM completion call
 
     Note:
-        Always exposes a 'security_risk' parameter in tool schemas via
-        add_security_risk_prediction=True. This ensures the schema remains
-        consistent, even if the security analyzer is disabled. Validation of
-        this field happens dynamically at runtime depending on the analyzer
-        configured. This allows weaker models to omit risk field and bypass
-        validation requirements when analyzer is disabled. For detailed logic,
-        see `_extract_security_risk` method in agent.py.
-
         Summary field is always added to tool schemas for transparency and
         explainability of agent actions.
     """
@@ -219,13 +211,11 @@ def make_llm_completion(
             tools=tools or [],
             include=None,
             store=False,
-            add_security_risk_prediction=True,
             on_token=on_token,
         )
     else:
         return llm.completion(
             messages=messages,
             tools=tools or [],
-            add_security_risk_prediction=True,
             on_token=on_token,
         )

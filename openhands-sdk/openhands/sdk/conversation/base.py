@@ -18,11 +18,6 @@ from openhands.sdk.observability.laminar import (
     should_enable_observability,
     start_active_span,
 )
-from openhands.sdk.security.analyzer import SecurityAnalyzerBase
-from openhands.sdk.security.confirmation_policy import (
-    ConfirmationPolicyBase,
-    NeverConfirm,
-)
 from openhands.sdk.workspace.base import BaseWorkspace
 
 
@@ -54,16 +49,6 @@ class ConversationStateProtocol(Protocol):
     @property
     def execution_status(self) -> "ConversationExecutionStatus":
         """The current conversation execution status."""
-        ...
-
-    @property
-    def confirmation_policy(self) -> ConfirmationPolicyBase:
-        """The confirmation policy."""
-        ...
-
-    @property
-    def security_analyzer(self) -> SecurityAnalyzerBase | None:
-        """The security analyzer."""
         ...
 
     @property
@@ -156,28 +141,6 @@ class BaseConversation(ABC):
         message or reaches the maximum iteration limit.
         """
         ...
-
-    @abstractmethod
-    def set_confirmation_policy(self, policy: ConfirmationPolicyBase) -> None:
-        """Set the confirmation policy for the conversation."""
-        ...
-
-    @property
-    def confirmation_policy_active(self) -> bool:
-        return not isinstance(self.state.confirmation_policy, NeverConfirm)
-
-    @property
-    def is_confirmation_mode_active(self) -> bool:
-        """Check if confirmation mode is active.
-
-        Returns True if BOTH conditions are met:
-        1. The conversation state has a security analyzer set (not None)
-        2. The confirmation policy is active
-
-        """
-        return (
-            self.state.security_analyzer is not None and self.confirmation_policy_active
-        )
 
     @abstractmethod
     def reject_pending_actions(

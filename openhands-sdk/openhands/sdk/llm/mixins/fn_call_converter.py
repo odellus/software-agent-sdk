@@ -931,16 +931,11 @@ def _extract_and_validate_params(
         found_params.add(param_name)
 
     # Check all required parameters are present
-    # Note: security_risk is excluded here because its validation happens later
-    # in Agent._extract_security_risk(), which has context about whether a security
-    # analyzer is configured. This allows weaker models to omit it when no analyzer
-    # is active, while still enforcing it for stronger models with LLMSecurityAnalyzer.
-    missing_params = required_params - found_params - {"security_risk"}
+    missing_params = required_params - found_params
     if missing_params:
         raise FunctionCallValidationError(
             f"Missing required parameters for function '{fn_name}': {missing_params}"
         )
-    return params
 
 
 def _preprocess_model_output(content: str) -> str:

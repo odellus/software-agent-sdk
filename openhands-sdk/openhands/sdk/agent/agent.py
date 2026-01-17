@@ -1,9 +1,7 @@
 import json
 
-from pydantic import ValidationError, model_validator
+from pydantic import ValidationError
 
-import openhands.sdk.security.analyzer as analyzer
-import openhands.sdk.security.risk as risk
 from openhands.sdk.agent.base import AgentBase
 from openhands.sdk.agent.utils import (
     fix_malformed_tool_arguments,
@@ -51,7 +49,6 @@ from openhands.sdk.observability.laminar import (
     should_enable_observability,
 )
 from openhands.sdk.observability.utils import extract_action_name
-from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
 from openhands.sdk.tool import (
     Action,
     Observation,
@@ -81,21 +78,6 @@ class Agent(AgentBase):
         >>> agent = Agent(llm=llm, tools=tools)
     """
 
-    @model_validator(mode="before")
-    @classmethod
-    def _add_security_prompt_as_default(cls, data):
-        """Ensure llm_security_analyzer=True is always set before initialization."""
-        if not isinstance(data, dict):
-            return data
-
-        kwargs = data.get("system_prompt_kwargs") or {}
-        if not isinstance(kwargs, dict):
-            kwargs = {}
-
-        kwargs.setdefault("llm_security_analyzer", True)
-        data["system_prompt_kwargs"] = kwargs
-        return data
-
     def init_state(
         self,
         state: ConversationState,
@@ -114,7 +96,7 @@ class Agent(AgentBase):
                 source="agent",
                 system_prompt=TextContent(text=self.system_message),
                 # Tools are stored as ToolDefinition objects and converted to
-                # OpenAI format with security_risk parameter during LLM completion.
+                # OpenAI format during LLM completion.
                 # See make_llm_completion() in agent/utils.py for details.
                 tools=list(self.tools_map.values()),
             )
@@ -239,7 +221,6 @@ class Agent(AgentBase):
                     tool_call,
                     llm_response_id=llm_response.id,
                     on_event=on_event,
-                    security_analyzer=state.security_analyzer,
                     thought=thought_content
                     if i == 0
                     else [],  # Only first gets thought
@@ -309,58 +290,8 @@ class Agent(AgentBase):
         if len(action_events) == 0:
             return False
 
-        # If a security analyzer is registered, use it to grab the risks of the actions
-        # involved. If not, we'll set the risks to UNKNOWN.
-        if state.security_analyzer is not None:
-            risks = [
-                risk
-                for _, risk in state.security_analyzer.analyze_pending_actions(
-                    action_events
-                )
-            ]
-        else:
-            risks = [risk.SecurityRisk.UNKNOWN] * len(action_events)
-
-        # Grab the confirmation policy from the state and pass in the risks.
-        if any(state.confirmation_policy.should_confirm(risk) for risk in risks):
-            state.execution_status = (
-                ConversationExecutionStatus.WAITING_FOR_CONFIRMATION
-            )
-            return True
-
+        # Always grant permission - no security checks
         return False
-
-    def _extract_security_risk(
-        self,
-        arguments: dict,
-        tool_name: str,
-        read_only_tool: bool,
-        security_analyzer: analyzer.SecurityAnalyzerBase | None = None,
-    ) -> risk.SecurityRisk:
-        requires_sr = isinstance(security_analyzer, LLMSecurityAnalyzer)
-        raw = arguments.pop("security_risk", None)
-
-        # Default risk value for action event
-        # Tool is marked as read-only so security risk can be ignored
-        if read_only_tool:
-            return risk.SecurityRisk.UNKNOWN
-
-        # Raises exception if failed to pass risk field when expected
-        # Exception will be sent back to agent as error event
-        # Strong models like GPT-5 can correct itself by retrying
-        if requires_sr and raw is None:
-            raise ValueError(
-                f"Failed to provide security_risk field in tool '{tool_name}'"
-            )
-
-        # When using weaker models without security analyzer
-        # safely ignore missing security risk fields
-        if not requires_sr and raw is None:
-            return risk.SecurityRisk.UNKNOWN
-
-        # Raises exception if invalid risk enum passed by LLM
-        security_risk = risk.SecurityRisk(raw)
-        return security_risk
 
     def _extract_summary(self, tool_name: str, arguments: dict) -> str:
         """Extract and validate the summary field from tool arguments.
@@ -391,7 +322,6 @@ class Agent(AgentBase):
         tool_call: MessageToolCall,
         llm_response_id: str,
         on_event: ConversationCallbackType,
-        security_analyzer: analyzer.SecurityAnalyzerBase | None = None,
         thought: list[TextContent] | None = None,
         reasoning_content: str | None = None,
         thinking_blocks: list[ThinkingBlock | RedactedThinkingBlock] | None = None,
@@ -431,21 +361,11 @@ class Agent(AgentBase):
             return
 
         # Validate arguments
-        security_risk: risk.SecurityRisk = risk.SecurityRisk.UNKNOWN
         try:
             arguments = json.loads(tool_call.arguments)
 
             # Fix malformed arguments (e.g., JSON strings for list/dict fields)
             arguments = fix_malformed_tool_arguments(arguments, tool.action_type)
-            security_risk = self._extract_security_risk(
-                arguments,
-                tool.name,
-                tool.annotations.readOnlyHint if tool.annotations else False,
-                security_analyzer,
-            )
-            assert "security_risk" not in arguments, (
-                "Unexpected 'security_risk' key found in tool arguments"
-            )
 
             summary = self._extract_summary(tool.name, arguments)
 
@@ -487,7 +407,6 @@ class Agent(AgentBase):
             tool_call_id=tool_call.id,
             tool_call=tool_call,
             llm_response_id=llm_response_id,
-            security_risk=security_risk,
             summary=summary,
         )
         on_event(action_event)

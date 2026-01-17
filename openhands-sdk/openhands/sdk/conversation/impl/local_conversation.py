@@ -36,10 +36,6 @@ from openhands.sdk.llm import LLM, Message, TextContent
 from openhands.sdk.llm.llm_registry import LLMRegistry
 from openhands.sdk.logger import get_logger
 from openhands.sdk.observability.laminar import observe
-from openhands.sdk.security.analyzer import SecurityAnalyzerBase
-from openhands.sdk.security.confirmation_policy import (
-    ConfirmationPolicyBase,
-)
 from openhands.sdk.workspace import LocalWorkspace
 
 
@@ -440,12 +436,6 @@ class LocalConversation(BaseConversation):
                 self._state.id, e, persistence_dir=self._state.persistence_dir
             ) from e
 
-    def set_confirmation_policy(self, policy: ConfirmationPolicyBase) -> None:
-        """Set the confirmation policy and store it in conversation state."""
-        with self._state:
-            self._state.confirmation_policy = policy
-        logger.info(f"Confirmation policy set to: {policy}")
-
     def reject_pending_actions(self, reason: str = "User rejected the action") -> None:
         """Reject all pending actions from the agent.
 
@@ -514,11 +504,6 @@ class LocalConversation(BaseConversation):
         secret_registry = self._state.secret_registry
         secret_registry.update_secrets(secrets)
         logger.info(f"Added {len(secrets)} secrets to conversation")
-
-    def set_security_analyzer(self, analyzer: SecurityAnalyzerBase | None) -> None:
-        """Set the security analyzer for the conversation."""
-        with self._state:
-            self._state.security_analyzer = analyzer
 
     def close(self) -> None:
         """Close the conversation and clean up all tool executors."""

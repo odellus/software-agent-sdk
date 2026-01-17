@@ -13,7 +13,6 @@ from openhands.sdk.llm import (
     TextContent,
     ThinkingBlock,
 )
-from openhands.sdk.security import risk
 from openhands.sdk.tool.schema import Action
 
 
@@ -46,9 +45,6 @@ class ActionEvent(LLMConvertibleEvent):
         description=(
             "The tool call received from the LLM response. We keep a copy of it "
             "so it is easier to construct it into LLM message"
-            "This could be different from `action`: e.g., `tool_call` may contain "
-            "`security_risk` field predicted by LLM when LLM risk analyzer is enabled"
-            ", while `action` does not."
         ),
     )
     llm_response_id: EventID = Field(
@@ -58,11 +54,6 @@ class ActionEvent(LLMConvertibleEvent):
             "This helps in tracking and managing results of parallel function calling "
             "from the same LLM response."
         ),
-    )
-
-    security_risk: risk.SecurityRisk = Field(
-        default=risk.SecurityRisk.UNKNOWN,
-        description="The LLM's assessment of the safety risk of this action.",
     )
 
     summary: str | None = Field(
@@ -83,9 +74,6 @@ class ActionEvent(LLMConvertibleEvent):
     def visualize(self) -> Text:
         """Return Rich Text representation of this action event."""
         content = Text()
-
-        if self.security_risk != risk.SecurityRisk.UNKNOWN:
-            content.append(self.security_risk.visualize)
 
         # Display summary if available
         if self.summary:

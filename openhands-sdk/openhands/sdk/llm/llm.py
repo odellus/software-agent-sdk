@@ -479,7 +479,6 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         messages: list[Message],
         tools: Sequence[ToolDefinition] | None = None,
         _return_metrics: bool = False,
-        add_security_risk_prediction: bool = False,
         on_token: TokenCallbackType | None = None,
         **kwargs,
     ) -> LLMResponse:
@@ -492,7 +491,6 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             messages: List of conversation messages
             tools: Optional list of tools available to the model
             _return_metrics: Whether to return usage metrics
-            add_security_risk_prediction: Add security_risk field to tool schemas
             on_token: Optional callback for streaming tokens
             **kwargs: Additional arguments passed to the LLM API
 
@@ -528,12 +526,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         # Convert Tool objects to ChatCompletionToolParam once here
         cc_tools: list[ChatCompletionToolParam] = []
         if tools:
-            cc_tools = [
-                t.to_openai_tool(
-                    add_security_risk_prediction=add_security_risk_prediction,
-                )
-                for t in tools
-            ]
+            cc_tools = [t.to_openai_tool() for t in tools]
 
         use_mock_tools = self.should_mock_tool_calls(cc_tools)
         if use_mock_tools:
@@ -642,7 +635,6 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         include: list[str] | None = None,
         store: bool | None = None,
         _return_metrics: bool = False,
-        add_security_risk_prediction: bool = False,
         on_token: TokenCallbackType | None = None,
         **kwargs,
     ) -> LLMResponse:
@@ -656,7 +648,6 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             include: Optional list of fields to include in response
             store: Whether to store the conversation
             _return_metrics: Whether to return usage metrics
-            add_security_risk_prediction: Add security_risk field to tool schemas
             on_token: Optional callback for streaming tokens (not yet supported)
             **kwargs: Additional arguments passed to the API
 
@@ -673,16 +664,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
 
         # Convert Tool objects to Responses ToolParam
         # (Responses path always supports function tools)
-        resp_tools = (
-            [
-                t.to_responses_tool(
-                    add_security_risk_prediction=add_security_risk_prediction,
-                )
-                for t in tools
-            ]
-            if tools
-            else None
-        )
+        resp_tools = [t.to_responses_tool() for t in tools] if tools else None
 
         # Normalize/override Responses kwargs consistently
         call_kwargs = select_responses_options(

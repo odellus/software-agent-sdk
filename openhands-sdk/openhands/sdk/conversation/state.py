@@ -18,11 +18,6 @@ from openhands.sdk.event import ActionEvent, ObservationEvent, UserRejectObserva
 from openhands.sdk.event.base import Event
 from openhands.sdk.io import FileStore, InMemoryFileStore, LocalFileStore
 from openhands.sdk.logger import get_logger
-from openhands.sdk.security.analyzer import SecurityAnalyzerBase
-from openhands.sdk.security.confirmation_policy import (
-    ConfirmationPolicyBase,
-    NeverConfirm,
-)
 from openhands.sdk.utils.models import OpenHandsModel
 from openhands.sdk.workspace.base import BaseWorkspace
 
@@ -85,11 +80,6 @@ class ConversationState(OpenHandsModel):
     # Enum-based state management
     execution_status: ConversationExecutionStatus = Field(
         default=ConversationExecutionStatus.IDLE
-    )
-    confirmation_policy: ConfirmationPolicyBase = NeverConfirm()
-    security_analyzer: SecurityAnalyzerBase | None = Field(
-        default=None,
-        description="Optional security analyzer to evaluate action risks.",
     )
 
     activated_knowledge_skills: list[str] = Field(

@@ -1,3 +1,4 @@
+import os
 from collections.abc import Callable
 from typing import (
     Any,
@@ -36,7 +37,14 @@ def maybe_init_laminar():
     """
     if should_enable_observability():
         if _is_otel_backend_laminar():
-            Laminar.initialize()
+            from lmnr import Laminar
+
+            Laminar.initialize(
+                project_api_key=get_env("LMNR_PROJECT_API_KEY"),
+                base_url="http://localhost",
+                http_port=8000,
+                grpc_port=8001,
+            )
         else:
             # Do not enable browser session replays for non-laminar backends
             Laminar.initialize(

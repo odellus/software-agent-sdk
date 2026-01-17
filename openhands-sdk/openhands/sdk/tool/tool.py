@@ -25,7 +25,6 @@ from pydantic import (
 )
 from pydantic.json_schema import SkipJsonSchema
 
-from openhands.sdk.security import risk
 from openhands.sdk.tool.schema import Action, Observation, Schema
 from openhands.sdk.utils.models import (
     DiscriminatedUnionMixin,
@@ -40,7 +39,6 @@ if TYPE_CHECKING:
 
 ActionT = TypeVar("ActionT", bound=Action)
 ObservationT = TypeVar("ObservationT", bound=Observation)
-_action_types_with_risk: dict[type, type] = {}
 _action_types_with_summary: dict[type, type] = {}
 
 
@@ -361,17 +359,9 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
 
     def _get_tool_schema(
         self,
-        add_security_risk_prediction: bool = False,
         action_type: type[Schema] | None = None,
     ) -> dict[str, Any]:
         action_type = action_type or self.action_type
-
-        # Apply security risk enhancement if enabled
-        add_security_risk_prediction = add_security_risk_prediction and (
-            self.annotations is None or (not self.annotations.readOnlyHint)
-        )
-        if add_security_risk_prediction:
-            action_type = create_action_type_with_risk(action_type)
 
         # Always add summary field for transparency and explainability
         action_type = _create_action_type_with_summary(action_type)
@@ -380,16 +370,11 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
 
     def to_openai_tool(
         self,
-        add_security_risk_prediction: bool = False,
         action_type: type[Schema] | None = None,
     ) -> ChatCompletionToolParam:
         """Convert a Tool to an OpenAI tool.
 
         Args:
-            add_security_risk_prediction: Whether to add a `security_risk` field
-                to the action schema for LLM to predict. This is useful for
-                tools that may have safety risks, so the LLM can reason about
-                the risk level before calling the tool.
             action_type: Optionally override the action_type to use for the schema.
                 This is useful for MCPTool to use a dynamically created action type
                 based on the tool's input schema.
@@ -404,7 +389,6 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
                 name=self.name,
                 description=self.description,
                 parameters=self._get_tool_schema(
-                    add_security_risk_prediction,
                     action_type,
                 ),
             ),
@@ -412,7 +396,6 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
 
     def to_responses_tool(
         self,
-        add_security_risk_prediction: bool = False,
         action_type: type[Schema] | None = None,
     ) -> FunctionToolParam:
         """Convert a Tool to a Responses API function tool (LiteLLM typed).
@@ -421,7 +404,6 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
         { "type": "function", "name": ..., "description": ..., "parameters": ... }
 
         Args:
-            add_security_risk_prediction: Whether to add a `security_risk` field
             action_type: Optional override for the action type
 
         Note:
@@ -434,7 +416,6 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
             "name": self.name,
             "description": self.description,
             "parameters": self._get_tool_schema(
-                add_security_risk_prediction,
                 action_type,
             ),
             "strict": False,
@@ -474,27 +455,6 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
             f"schema has not been cached."
         )
         raise ValueError(error_msg)
-
-
-def create_action_type_with_risk(action_type: type[Schema]) -> type[Schema]:
-    action_type_with_risk = _action_types_with_risk.get(action_type)
-    if action_type_with_risk:
-        return action_type_with_risk
-
-    action_type_with_risk = type(
-        f"{action_type.__name__}WithRisk",
-        (action_type,),
-        {
-            "security_risk": Field(
-                # We do NOT add default value to make it an required field
-                # default=risk.SecurityRisk.UNKNOWN
-                description="The LLM's assessment of the safety risk of this action.",
-            ),
-            "__annotations__": {"security_risk": risk.SecurityRisk},
-        },
-    )
-    _action_types_with_risk[action_type] = action_type_with_risk
-    return action_type_with_risk
 
 
 def _create_action_type_with_summary(action_type: type[Schema]) -> type[Schema]:

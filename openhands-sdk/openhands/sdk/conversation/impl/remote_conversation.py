@@ -43,10 +43,6 @@ from openhands.sdk.hooks import (
 from openhands.sdk.llm import LLM, Message, TextContent
 from openhands.sdk.logger import DEBUG, get_logger
 from openhands.sdk.observability.laminar import observe
-from openhands.sdk.security.analyzer import SecurityAnalyzerBase
-from openhands.sdk.security.confirmation_policy import (
-    ConfirmationPolicyBase,
-)
 from openhands.sdk.workspace import LocalWorkspace, RemoteWorkspace
 
 
@@ -346,27 +342,6 @@ class RemoteState(ConversationStateProtocol):
             f"Setting execution_status on RemoteState has no effect. "
             f"Remote execution status is managed server-side. Attempted to set: {value}"
         )
-
-    @property
-    def confirmation_policy(self) -> ConfirmationPolicyBase:
-        """The confirmation policy."""
-        info = self._get_conversation_info()
-        policy_data = info.get("confirmation_policy")
-        if policy_data is None:
-            raise RuntimeError(
-                "confirmation_policy missing in conversation info: " + str(info)
-            )
-        return ConfirmationPolicyBase.model_validate(policy_data)
-
-    @property
-    def security_analyzer(self) -> SecurityAnalyzerBase | None:
-        """The security analyzer."""
-        info = self._get_conversation_info()
-        analyzer_data = info.get("security_analyzer")
-        if analyzer_data:
-            return SecurityAnalyzerBase.model_validate(analyzer_data)
-
-        return None
 
     @property
     def activated_knowledge_skills(self) -> list[str]:
@@ -851,25 +826,6 @@ class RemoteConversation(BaseConversation):
                 if detail and code:
                     return f"{code}: {detail}"
                 return detail or code or None
-
-    def set_confirmation_policy(self, policy: ConfirmationPolicyBase) -> None:
-        payload = {"policy": policy.model_dump()}
-        _send_request(
-            self._client,
-            "POST",
-            f"/api/conversations/{self._id}/confirmation_policy",
-            json=payload,
-        )
-
-    def set_security_analyzer(self, analyzer: SecurityAnalyzerBase | None) -> None:
-        """Set the security analyzer for the remote conversation."""
-        payload = {"security_analyzer": analyzer.model_dump() if analyzer else analyzer}
-        _send_request(
-            self._client,
-            "POST",
-            f"/api/conversations/{self._id}/security_analyzer",
-            json=payload,
-        )
 
     def reject_pending_actions(self, reason: str = "User rejected the action") -> None:
         # Equivalent to rejecting confirmation: pause
