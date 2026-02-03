@@ -811,12 +811,22 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                     **kwargs,
                 )
                 if enable_streaming and on_token is not None:
-                    assert isinstance(ret, CustomStreamWrapper)
-                    chunks = []
-                    for chunk in ret:
-                        on_token(chunk)
-                        chunks.append(chunk)
-                    ret = litellm.stream_chunk_builder(chunks, messages=messages)
+                    # Handle both CustomStreamWrapper and other iterable types
+                    # Some API providers (like ZAI) return non-CustomStreamWrapper iterables
+                    if isinstance(ret, CustomStreamWrapper):
+                        chunks = []
+                        for chunk in ret:
+                            on_token(chunk)
+                            chunks.append(chunk)
+                        ret = litellm.stream_chunk_builder(chunks, messages=messages)
+                    else:
+                        # Handle non-CustomStreamWrapper streaming responses
+                        # (e.g., from certain API providers like ZAI)
+                        chunks = []
+                        for chunk in ret:
+                            on_token(chunk)
+                            chunks.append(chunk)
+                        ret = litellm.stream_chunk_builder(chunks, messages=messages)
 
                 assert isinstance(ret, ModelResponse), (
                     f"Expected ModelResponse, got {type(ret)}"
